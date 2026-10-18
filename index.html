@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>五子棋</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>五子棋</h1>
+      <p id="status" role="status" aria-live="polite"></p>
+    </header>
+
+    <div class="board-wrap">
+      <canvas id="board" aria-label="五子棋棋盘"></canvas>
+    </div>
+
+    <section class="controls">
+      <label>模式
+        <select id="mode">
+          <option value="ai-black">人机对战（我执黑先手）</option>
+          <option value="ai-white">人机对战（我执白后手）</option>
+          <option value="pvp">双人对战</option>
+        </select>
+      </label>
+      <label id="levelWrap">难度
+        <select id="level">
+          <option value="easy">简单</option>
+          <option value="normal" selected>普通</option>
+          <option value="hard">困难</option>
+        </select>
+      </label>
+      <div class="buttons">
+        <button id="undo" type="button">悔棋</button>
+        <button id="restart" type="button" class="primary">重新开始</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="src/rules.js"></script>
+  <script src="src/game.js"></script>
+  <script src="src/ai.js"></script>
+  <script src="src/ui.js"></script>
+</body>
+</html>
