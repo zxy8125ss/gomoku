@@ -12,6 +12,9 @@
     haptics: true,
     numbers: false,       // 棋子上显示步数
     coords: true,         // 棋盘边缘显示坐标
+    commentary: true,     // 相声式解说（字幕）
+    voice: true,          // 解说语音朗读
+    chatter: 'mid',       // 解说频率：high | mid | low
     setup: { level: 'normal', side: 'black', forbidden: false },   // 上次的开局选择
   };
 

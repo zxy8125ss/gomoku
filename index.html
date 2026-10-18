@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>五子棋</title>
-  <meta name="description" content="经典五子棋：四档 AI、禁手规则、复盘、离线可玩">
+  <meta name="description" content="经典五子棋：四档 AI、禁手规则、相声式语音解说、复盘、离线可玩">
   <meta name="theme-color" content="#d6a85a">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -69,6 +69,8 @@
         </div>
       </div>
 
+      <div class="chat" id="chat" aria-live="polite" hidden></div>
+
       <nav class="actions" id="actionBar">
         <button class="act" id="btnUndo"><svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg><span>悔棋</span></button>
         <button class="act" id="btnHint"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg><span>提示</span></button>
@@ -104,6 +106,8 @@
   <script src="src/ai.js"></script>
   <script src="src/store.js"></script>
   <script src="src/audio.js"></script>
+  <script src="src/commentary.js"></script>
+  <script src="src/voice.js"></script>
   <script src="src/render.js"></script>
   <script src="src/ui.js"></script>
   <script>

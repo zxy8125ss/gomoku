@@ -284,4 +284,97 @@ t('Store：存档读写、损坏数据不崩溃', () => {
   assert.strictEqual(st.getSettings().theme, 'wood');
 });
 
+
+/* ---------- 相声解说 ---------- */
+const Com = require('../src/commentary.js');
+const mv = (x, y, player) => ({ x, y, player });
+
+t('解说：识别活三', () => {
+  const b = R.createBoard();
+  put(b, R.BLACK, [[6, 7], [7, 7]]);
+  assert.strictEqual(Com.analyzeMove(b, mv(8, 7, R.BLACK), 5).event, 'openThree');
+  assert.strictEqual(b[7][8], R.EMPTY, '分析后棋盘应还原');
+});
+
+t('解说：识别冲四、活四、成五', () => {
+  let b = R.createBoard();
+  put(b, R.BLACK, [[6, 7], [7, 7], [8, 7]]); put(b, R.WHITE, [[5, 7]]);
+  assert.strictEqual(Com.analyzeMove(b, mv(9, 7, R.BLACK), 5).event, 'four');
+  b = R.createBoard(); put(b, R.BLACK, [[6, 7], [7, 7], [8, 7]]);
+  assert.strictEqual(Com.analyzeMove(b, mv(9, 7, R.BLACK), 5).event, 'openFour');
+  b = R.createBoard(); put(b, R.BLACK, [[5, 7], [6, 7], [7, 7], [8, 7]]);
+  assert.strictEqual(Com.analyzeMove(b, mv(9, 7, R.BLACK), 5).event, 'five');
+});
+
+t('解说：识别双杀(三三 / 四三)', () => {
+  const b = R.createBoard();
+  put(b, R.BLACK, [[5, 7], [6, 7], [7, 5], [7, 6]]);
+  assert.strictEqual(Com.analyzeMove(b, mv(7, 7, R.BLACK), 8).event, 'doubleThreat');
+});
+
+t('解说：识别堵四、堵三、堵双杀', () => {
+  let b = R.createBoard();
+  put(b, R.BLACK, [[5, 7], [6, 7], [7, 7], [8, 7]]);
+  assert.strictEqual(Com.analyzeMove(b, mv(9, 7, R.WHITE), 9).event, 'blockFour');
+  b = R.createBoard(); put(b, R.BLACK, [[6, 7], [7, 7], [8, 7]]);
+  assert.strictEqual(Com.analyzeMove(b, mv(9, 7, R.WHITE), 9).event, 'blockThree');
+  b = R.createBoard(); put(b, R.BLACK, [[5, 7], [6, 7], [7, 5], [7, 6]]);
+  assert.strictEqual(Com.analyzeMove(b, mv(7, 7, R.WHITE), 9).event, 'blockDouble');
+});
+
+t('解说：天元、边线、普通落子', () => {
+  const b = R.createBoard();
+  assert.strictEqual(Com.analyzeMove(b, mv(7, 7, R.BLACK), 0).event, 'center');
+  assert.strictEqual(Com.analyzeMove(b, mv(0, 3, R.BLACK), 4).event, 'edge');
+  assert.strictEqual(Com.analyzeMove(b, mv(4, 4, R.BLACK), 4).event, 'plain');
+});
+
+t('解说：台词库完整（人物合法、句子不空不超长、占位符齐全）', () => {
+  const need = ['start.ai', 'start.pvp', 'start.forbidden', 'center', 'edge', 'plain', 'hint', 'undo', 'forbiddenTry',
+    'resign.me', 'resign.pvp', 'win.me', 'lose.me', 'win.pvp', 'draw', 'thinking', 'longgame', 'replay'];
+  for (const ev of ['openThree', 'four', 'openFour', 'doubleThreat', 'blockFour', 'blockThree', 'blockDouble'])
+    for (const side of ['me', 'ai', 'pvp']) need.push(`${ev}.${side}`);
+  for (const k of need) assert(Com.LINES[k] && Com.LINES[k].length >= 1, `缺少台词: ${k}`);
+  for (const [k, list] of Object.entries(Com.LINES)) {
+    for (const d of list) {
+      assert(d.length >= 2, `${k}: 一段对话至少两句`);
+      assert.strictEqual(d[0][0] === d[1][0], false, `${k}: 相邻两句应由不同人说`);
+      for (const [who, text] of d) {
+        assert(who === '憨' || who === '稳', `${k}: 人物 ${who}`);
+        assert(text.length > 0 && text.length <= 32, `${k}: 句子长度 ${text.length}: ${text}`);
+        assert(!/[{}]/.test(text.replace(/\{n\}/g, '')), `${k}: 占位符 ${text}`);
+      }
+    }
+  }
+});
+
+t('解说：不使用真人姓名', () => {
+  const all = JSON.stringify(Com.LINES) + JSON.stringify(Com.WHO);
+  for (const name of ['岳云鹏', '孙越', '云鹏', '岳岳']) assert(!all.includes(name), name);
+});
+
+t('解说：频率控制与打断规则', () => {
+  const b = R.createBoard();
+  const always = () => 0, never = () => 0.999;
+  // 高频：普通落子必说；低频：普通落子不说
+  assert(Com.createCommentator({ rng: always }).move(b, mv(4, 4, R.BLACK), { side: 'me', level: 'high', moveCount: 3 }));
+  assert.strictEqual(Com.createCommentator({ rng: always }).move(b, mv(4, 4, R.BLACK), { side: 'me', level: 'low', moveCount: 3 }), null);
+  // 重要事件任何频率都说，并且会打断
+  const b2 = R.createBoard(); put(b2, R.BLACK, [[6, 7], [7, 7], [8, 7]]);
+  const r = Com.createCommentator({ rng: never }).move(b2, mv(9, 7, R.BLACK), { side: 'me', level: 'low', moveCount: 5 });
+  assert(r && r.key === 'openFour' && r.high);
+  // 成五由输赢台词负责，这里不吭声
+  const b3 = R.createBoard(); put(b3, R.BLACK, [[5, 7], [6, 7], [7, 7], [8, 7]]);
+  assert.strictEqual(Com.createCommentator({ rng: always }).move(b3, mv(9, 7, R.BLACK), { side: 'me', level: 'high', moveCount: 9 }), null);
+});
+
+t('解说：连续两次不重复同一段，占位符被替换', () => {
+  const c = Com.createCommentator({ rng: () => 0 });
+  const a = c.event('hint'), b2 = c.event('hint');
+  assert.notStrictEqual(JSON.stringify(a.lines), JSON.stringify(b2.lines));
+  const all = Com.createCommentator({ rng: () => 0.99 }).event('win.me', null, { n: 37 }).lines.map(l => l.text).join('');
+  assert(!/[{}]/.test(all), all);
+  assert(all.includes('37'), '第二段台词应带入手数');
+});
+
 console.log(`\n${passed} 项测试通过`);

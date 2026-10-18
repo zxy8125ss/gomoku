@@ -101,7 +101,7 @@ h1 { margin: 14px 0 0; font-size: 2.2rem; letter-spacing: .4em; text-indent: .4e
 .board-area { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .board-wrap {
   position: relative; margin: 0 auto;
-  width: min(100%, calc(100dvh - 44px - 64px - 92px - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+  width: min(100%, calc(100dvh - 44px - 64px - 92px - 40px - var(--chat-h, 0px) - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
   aspect-ratio: 1; flex: none;
 }
 canvas#board {
@@ -129,6 +129,28 @@ canvas#board {
 .act:disabled { opacity: .4; cursor: not-allowed; }
 .act.accent { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .act[hidden] { display: none; }
+
+/* 相声解说字幕 */
+#game.chat-on { --chat-h: 86px; }
+.chat { display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; min-height: 80px; padding-top: 8px; }
+.chat:empty::before { content: "🎙 阿憨 & 老稳 为您解说"; text-align: center; color: var(--muted); font-size: .8rem; opacity: .8; }
+.bubble { display: flex; align-items: flex-start; gap: 8px; animation: pop .25s ease; transition: opacity .3s; }
+.bubble.old { opacity: .45; }
+.bubble.right { flex-direction: row-reverse; }
+.av {
+  width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  color: #fff; font-weight: 800; font-size: .85rem; box-shadow: 0 2px 5px var(--shadow);
+}
+.av.han { background: #e9734f; }
+.av.wen { background: #3f6fb5; }
+.tx {
+  position: relative; padding: 6px 12px; border-radius: 14px; font-size: .9rem; line-height: 1.4; max-width: calc(100% - 46px);
+  background: var(--panel); border: 1px solid var(--border); box-shadow: 0 2px 6px var(--shadow);
+}
+.tx small { display: block; color: var(--muted); font-size: .68rem; line-height: 1.1; margin-bottom: 1px; letter-spacing: .05em; }
+.bubble.speaking .tx { border-color: var(--accent); }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.96); } to { opacity: 1; transform: none; } }
+#game.replaying .chat { display: none; }
 
 /* 复盘条 */
 .replaybar { display: none; flex-direction: column; gap: 6px; }
@@ -174,6 +196,7 @@ input[type=range] { width: 100%; accent-color: var(--accent); height: 28px; }
 .row:last-child { border-bottom: 0; }
 .row .lbl { display: flex; flex-direction: column; }
 .row .lbl small { color: var(--muted); font-size: .78rem; }
+.note { margin: -4px 0 6px; font-size: .78rem; color: var(--accent); }
 .switch { position: relative; width: 48px; height: 28px; flex: none; }
 .switch input { opacity: 0; width: 100%; height: 100%; position: absolute; margin: 0; cursor: pointer; z-index: 1; }
 .switch span { position: absolute; inset: 0; border-radius: 99px; background: var(--border); transition: background .2s; }

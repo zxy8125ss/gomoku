@@ -4,6 +4,8 @@
   const { Game } = GomokuGame;
   const store = GomokuStore.create();
   const sfx = GomokuAudio;
+  const Voice = GomokuVoice;
+  const commentator = GomokuCommentary.createCommentator();
   const $ = id => document.getElementById(id);
 
   const LEVELS = {
@@ -19,7 +21,8 @@
   let session = null;           // {mode:'ai'|'pvp', level, human, game, counted, forbidden, resignedBy}
   let replay = null;            // {step, timer}
   let thinking = false;
-  let aiToken = 0, hintToken = 0, hintTimer = 0, toastTimer = 0;
+  let aiToken = 0, hintToken = 0, hintTimer = 0, toastTimer = 0, thinkTimer = 0;
+  let narToken = 0, narBusy = false;
 
   const view = new GomokuView.BoardView($('board'));
 
@@ -83,6 +86,60 @@
     if (id === 'game') requestAnimationFrame(() => view.resize());
   }
 
+  /* ================= 相声解说：字幕 + 语音 ================= */
+  const chat = $('chat');
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const sideOf = player => (session.mode === 'pvp' ? 'pvp' : (player === session.human ? 'me' : 'ai'));
+
+  function showBubble(line) {
+    for (const b of chat.querySelectorAll('.bubble')) { b.classList.remove('speaking'); b.classList.add('old'); }
+    while (chat.children.length >= 2) chat.removeChild(chat.firstChild);
+    const han = line.who === '憨';
+    const el = document.createElement('div');
+    el.className = `bubble speaking ${han ? '' : 'right'}`;
+    const av = document.createElement('div'); av.className = `av ${han ? 'han' : 'wen'}`; av.textContent = line.who;
+    const tx = document.createElement('div'); tx.className = 'tx';
+    const name = document.createElement('small'); name.textContent = line.name;
+    tx.append(name, document.createTextNode(line.text));
+    el.append(av, tx);
+    chat.appendChild(el);
+  }
+
+  /* 播放一段对话。重要事件(high)会打断正在说的话，普通事件在对方说话时直接跳过。 */
+  async function narrate(item) {
+    if (!item || !settings.commentary || !session) return;
+    if (narBusy && !item.high) return;
+    const wasBusy = narBusy, token = ++narToken;
+    narBusy = true;
+    Voice.cancel();
+    if (wasBusy) await sleep(70);        // 紧接着 cancel 再 speak，部分浏览器会吞掉
+    for (const line of item.lines) {
+      if (token !== narToken) return;
+      showBubble(line);
+      const spoke = settings.voice && Voice.available() ? await Voice.speak(line.text, line.who) : false;
+      if (token !== narToken) return;
+      if (!spoke) await sleep(800 + line.text.length * 130);   // 没有语音时按字数停留，方便阅读字幕
+      await sleep(200);
+    }
+    if (token === narToken) {
+      narBusy = false;
+      for (const b of chat.querySelectorAll('.speaking')) b.classList.remove('speaking');
+    }
+  }
+
+  function clearNarration() {
+    narToken++; narBusy = false; clearTimeout(thinkTimer);
+    Voice.cancel();
+    chat.textContent = '';
+  }
+
+  function commentMove() {
+    if (!settings.commentary || session.game.over) return;
+    const g = session.game, last = g.lastMove;
+    const before = g.snapshot(g.moves.length - 1);
+    narrate(commentator.move(before.board, last, { side: sideOf(last.player), level: settings.chatter, moveCount: g.moves.length - 1 }));
+  }
+
   /* ================= 设置 ================= */
   function applySettings() {
     document.documentElement.dataset.theme = settings.theme;
@@ -92,6 +149,10 @@
     view.opts.numbers = settings.numbers; view.opts.coords = settings.coords;
     view.draw();
     sfx.configure(settings);
+    chat.hidden = !settings.commentary;
+    $('game').classList.toggle('chat-on', !!settings.commentary);
+    if (!settings.commentary) clearNarration();
+    requestAnimationFrame(() => view.resize());
     store.saveSettings(settings);
   }
 
@@ -138,8 +199,10 @@
     let human = null;
     if (mode === 'ai') human = side === 'random' ? (Math.random() < 0.5 ? BLACK : WHITE) : (side === 'white' ? WHITE : BLACK);
     session = { mode, level, human, game: new Game(15, { forbidden }), counted: false, forbidden, resignedBy: null };
+    clearNarration();
     persist();
     enterGame();
+    setTimeout(() => narrate(commentator.event(forbidden ? 'start.forbidden' : (mode === 'ai' ? 'start.ai' : 'start.pvp'))), 500);
   }
 
   function enterGame() {
@@ -190,7 +253,7 @@
     clearHint();
     persist();
     renderStatus();
-    if (g.over) onGameOver(); else maybeAI();
+    if (g.over) onGameOver(); else { commentMove(); maybeAI(); }
   }
 
   function handlePlace(x, y) {
@@ -198,7 +261,7 @@
     const g = session.game;
     if (!g.canPlay(x, y)) return;
     if (!g.play(x, y)) {
-      if (g.error) { toast(`${g.error}，黑棋不能下在这里`); sfx.error(); }
+      if (g.error) { toast(`${g.error}，黑棋不能下在这里`); sfx.error(); narrate(commentator.event('forbiddenTry')); }
       return;
     }
     view.hover = null;
@@ -209,6 +272,10 @@
     if (!aiTurn() || replay) return;
     const token = ++aiToken;
     thinking = true; renderStatus();
+    clearTimeout(thinkTimer);
+    thinkTimer = setTimeout(() => {
+      if (thinking && token === aiToken) { const it = commentator.event('thinking'); if (it) { it.high = false; narrate(it); } }
+    }, 1800);
     const g = session.game, t0 = Date.now();
     let res = null;
     try {
@@ -217,12 +284,12 @@
     const rest = MIN_THINK_MS - (Date.now() - t0);
     if (rest > 0) await new Promise(r => setTimeout(r, rest));
     if (token !== aiToken || !session) return;      // 期间悔棋 / 重开 / 离开了
-    thinking = false;
+    thinking = false; clearTimeout(thinkTimer);
     if (res && res.move && session.game.play(res.move.x, res.move.y)) onMoved();
     else renderStatus();
   }
 
-  function cancelAI() { aiToken++; thinking = false; }
+  function cancelAI() { aiToken++; thinking = false; clearTimeout(thinkTimer); }
 
   /* ================= 结束 ================= */
   function onGameOver() {
@@ -239,6 +306,12 @@
     const humanWon = session.mode === 'pvp' || g.winner === session.human;
     if (g.winner === 'draw') sfx.draw(); else if (humanWon) sfx.win(); else sfx.lose();
     if (g.winner !== 'draw' && humanWon) setTimeout(confetti, 350);
+    let ending;
+    if (g.winner === 'draw') ending = commentator.event('draw');
+    else if (g.resigned) ending = commentator.event(session.mode === 'ai' ? 'resign.me' : 'resign.pvp');
+    else if (session.mode === 'pvp') ending = commentator.event('win.pvp', null, { n: g.moves.length });
+    else ending = commentator.event(g.winner === session.human ? 'win.me' : 'lose.me', null, { n: g.moves.length });
+    setTimeout(() => { if (session && session.game === g) narrate(ending); }, 900);
     setTimeout(() => { if (session && session.game === g && g.over && !replay) showResult(); }, 1000);
   }
 
@@ -286,6 +359,7 @@
     if (res && res.move) {
       view.setHint({ x: res.move.x, y: res.move.y });
       hintTimer = setTimeout(clearHint, 4500);
+      narrate(commentator.event('hint'));
     }
   }
 
@@ -298,6 +372,7 @@
     if (session.resignedBy) session.resignedBy = null;
     sfx.click();
     persist(); view.setGame(g); renderStatus(); maybeAI();
+    narrate(commentator.event('undo'));
   }
 
   function confirmBox(title, text, okLabel, onOk, danger = false) {
@@ -332,11 +407,12 @@
 
   function startReplay() {
     if (!session || !session.game.moves.length) return;
-    cancelAI(); clearHint(); closeModal();
+    cancelAI(); clearHint(); closeModal(); clearNarration();
     replay = { step: 0, timer: 0 };
     $('game').classList.add('replaying');
     slider.max = session.game.moves.length;
     gotoStep(0);
+    narrate(commentator.event('replay'));
   }
 
   function gotoStep(k, animate = false) {
@@ -430,8 +506,24 @@
       ${sw('haptics', '震动', '落子时轻微震动（仅支持的手机）')}
       ${sw('numbers', '显示步数', '在棋子上标出落子顺序')}
       ${sw('coords', '显示坐标', '棋盘四边的字母与数字')}
+      <h3>相声解说</h3>
+      ${sw('commentary', '解说字幕', '原创虚构搭档「阿憨」和「老稳」边下边聊')}
+      ${sw('voice', '语音朗读', '用设备自带的中文语音，两人音调不同')}
+      ${Voice.available() ? '' : '<p class="note">未检测到设备的中文语音，将只显示字幕</p>'}
+      <div class="row">
+        <div class="lbl"><span>解说频率</span></div>
+        <div class="seg" style="flex:none;width:58%">
+          ${[['high', '话痨'], ['mid', '适中'], ['low', '安静']].map(([k, t]) => `<button class="opt ${settings.chatter === k ? 'on' : ''}" data-chatter="${k}" style="padding:7px 4px"><b>${t}</b></button>`).join('')}
+        </div>
+      </div>
       <div class="btns"><button class="btn primary" data-act="cancel">完成</button></div>`);
     sheet.onclick = e => {
+      const ch = e.target.closest('[data-chatter]');
+      if (ch) {
+        settings.chatter = ch.dataset.chatter; applySettings();
+        for (const b of sheet.querySelectorAll('[data-chatter]')) b.classList.toggle('on', b === ch);
+        return;
+      }
       const sw_ = e.target.closest('[data-theme]');
       if (sw_) {
         settings.theme = sw_.dataset.theme; applySettings();
@@ -440,7 +532,11 @@
     };
     sheet.onchange = e => {
       const k = e.target.dataset && e.target.dataset.setting;
-      if (k) { settings[k] = e.target.checked; applySettings(); if (k === 'sound' && settings.sound) sfx.click(); }
+      if (k) {
+        settings[k] = e.target.checked; applySettings();
+        if (k === 'sound' && settings.sound) sfx.click();
+        if (k === 'voice' && !settings.voice) Voice.cancel();
+      }
     };
   }
 
@@ -505,7 +601,7 @@
   });
 
   function goHome() {
-    cancelAI(); clearHint(); exitReplayQuiet();
+    cancelAI(); clearHint(); exitReplayQuiet(); clearNarration();
     refreshHome(); showScreen('home');
   }
 
@@ -549,7 +645,7 @@
     const c = view.cellAt(e.clientX, e.clientY);
     if (c) handlePlace(c.x, c.y);
   });
-  document.addEventListener('pointerdown', () => sfx.unlock(), { once: true });
+  document.addEventListener('pointerdown', () => { sfx.unlock(); Voice.unlock(); }, { once: true });
 
   $('btnAI').onclick = () => { sfx.click(); openSetup('ai'); };
   $('btnPVP').onclick = () => { sfx.click(); openSetup('pvp'); };
@@ -589,6 +685,6 @@
     get game() { return session && session.game; },
     get session() { return session; },
     get thinking() { return thinking; },
-    view, store, ai, settings: () => settings,
+    view, store, ai, settings: () => settings, narrate, commentator,
   };
 })();

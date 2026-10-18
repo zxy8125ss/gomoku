@@ -13,3 +13,4 @@
 - 修改任何被缓存的文件（`index.html`、`style.css`、`src/*`、`icons/*`、`manifest.webmanifest`）后，
   递增 `sw.js` 里的 `CACHE` 版本号，否则用户拿不到新版。
 - 仓库地址是 `zxy8125ss/gomoku`，不是 `Game`。
+- 解说人物「阿憨」「老稳」必须保持原创虚构，台词里不要出现任何真人姓名，也不要模仿真人声音；测试里有对应的检查。
