@@ -1,32 +1,51 @@
 # 五子棋
 
-纯前端（HTML + Canvas + 原生 JS）实现，无需构建，直接用浏览器打开 `index.html` 即可。
+纯前端（HTML + Canvas + 原生 JS）实现，无需构建，可安装为手机 App（PWA），完全离线可用。
 
 ## 功能
-- 15×15 棋盘，黑先；横、竖、斜任意方向连成五子（含长连）获胜
-- 人机对战（可选执黑/执白，简单/普通/困难三档）与双人同屏对战
-- 悔棋（人机模式下一次撤回双方各一步）、重新开始
-- 最后一步标记、获胜连线高亮、悬停落子预览；手机和深色模式适配
-- **可安装的 App（PWA）**：全屏运行、完全离线可用，关闭后自动保存并继续上一局
+- **四档 AI**：入门 / 普通 / 困难 / 大师。普通以上使用迭代加深的 alpha-beta 搜索，在 Web Worker 中运行，思考时界面不卡
+- **禁手规则**（可选）：黑棋三三、四四、长连禁手，黑棋须恰好五连才赢；悬停在禁手点上会显示红叉
+- **提示**：让 AI 帮你看一步好棋
+- **复盘**：逐手前进后退、拖动进度条、自动播放
+- **战绩统计**：各难度胜负平、胜率、连胜；双人对战记录
+- **三种棋盘主题**：原木 / 墨玉 / 青瓷；可显示步数与坐标
+- 落子动画、合成音效（Web Audio）、震动反馈、胜利撒花
+- 悔棋、认输、重开；关闭后自动保存，下次可继续对局
+- 手机、平板、桌面自适应，深浅色主题随设置切换
+
+## 安装成手机 App
+仓库已配置 GitHub Pages 自动部署（Settings → Pages → Source 选 GitHub Actions）。部署后用手机打开：
+
+https://zxy8125ss.github.io/gomoku/
+
+- **iPhone（Safari）**：分享按钮 → 添加到主屏幕
+- **Android（Chrome）**：菜单 → 安装应用
+
+本地预览：`python3 -m http.server 8000`，访问 `http://localhost:8000`
+（Service Worker 与 Web Worker 需要 http(s)；直接双击打开 `index.html` 也能玩，AI 会自动退回主线程计算，只是没有离线缓存）。
 
 ## 结构
 | 文件 | 作用 |
 |---|---|
-| `src/rules.js` | 棋盘与胜负判定（纯函数） |
-| `src/game.js`  | 对局状态：落子、悔棋 |
-| `src/ai.js`    | AI：五格窗口启发式评分（进攻 + 防守） |
-| `src/ui.js`    | Canvas 绘制与交互 |
-| `tests/test.js`| `node tests/test.js` 运行规则与 AI 测试 |
+| `src/rules.js` | 棋盘、胜负判定、禁手判定（纯函数） |
+| `src/game.js` | 对局状态：落子、悔棋、认输、复盘快照 |
+| `src/ai.js` | AI：启发式评分 + alpha-beta 搜索 + 难度配置 |
+| `src/ai-worker.js` | 在 Web Worker 中运行 AI |
+| `src/store.js` | 设置、战绩、存档（localStorage，可注入便于测试） |
+| `src/audio.js` | 音效与震动（Web Audio 现场合成） |
+| `src/render.js` | Canvas 棋盘渲染、主题、动画 |
+| `src/ui.js` | 界面控制器：首页、弹层、对局、复盘 |
+| `sw.js` / `manifest.webmanifest` | 离线缓存与 App 清单 |
+| `tests/test.js` | `node tests/test.js`：规则、禁手、AI、存储测试 |
 
-## 安装成手机 App
-1. 在仓库 **Settings → Pages** 把 Source 设为 **GitHub Actions**，推送后会自动部署到
-   `https://<用户名>.github.io/gomoku/`
-2. 用手机打开该地址：
-   - **iPhone（Safari）**：点分享按钮 → 添加到主屏幕
-   - **Android（Chrome）**：菜单 → 安装应用 / 添加到主屏幕
-3. 之后从桌面图标打开即可，无需联网。
+## AI 说明
+| 难度 | 做法 | 每步耗时上限 |
+|---|---|---|
+| 入门 | 单步启发式评分，25% 概率手滑 | 即时 |
+| 普通 | 搜索 2 层 | 0.5 秒 |
+| 困难 | 迭代加深，最多 6 层 | 1.2 秒 |
+| 大师 | 迭代加深，最多 12 层 | 3 秒 |
 
-本地预览：`python3 -m http.server 8000`，访问 `http://localhost:8000`
-（Service Worker 需要 http(s)，直接双击打开 `index.html` 也能玩，只是没有离线缓存）。
+对战测试中：困难 8:0 胜普通，大师 4:0 胜普通、3:1 胜困难。AI 没有开局库和威胁空间搜索，高手靠长线布局有机会赢它。
 
 更新应用文件后，记得递增 `sw.js` 里的 `CACHE` 版本号，用户才会拿到新版。

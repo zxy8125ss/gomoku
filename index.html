@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="wood">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>五子棋</title>
+  <meta name="description" content="经典五子棋：四档 AI、禁手规则、复盘、离线可玩">
   <meta name="theme-color" content="#d6a85a">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,45 +16,104 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <header>
-      <h1>五子棋</h1>
-      <p id="status" role="status" aria-live="polite"></p>
-    </header>
+  <div id="app">
 
-    <div class="board-wrap">
-      <canvas id="board" aria-label="五子棋棋盘"></canvas>
-    </div>
-
-    <section class="controls">
-      <label>模式
-        <select id="mode">
-          <option value="ai-black">人机对战（我执黑先手）</option>
-          <option value="ai-white">人机对战（我执白后手）</option>
-          <option value="pvp">双人对战</option>
-        </select>
-      </label>
-      <label id="levelWrap">难度
-        <select id="level">
-          <option value="easy">简单</option>
-          <option value="normal" selected>普通</option>
-          <option value="hard">困难</option>
-        </select>
-      </label>
-      <div class="buttons">
-        <button id="undo" type="button">悔棋</button>
-        <button id="restart" type="button" class="primary">重新开始</button>
+    <!-- 首页 -->
+    <section id="home" class="screen active" aria-label="首页">
+      <div class="home-hero">
+        <img class="logo" src="icons/icon.svg" alt="" width="96" height="96">
+        <h1>五子棋</h1>
+        <p class="tagline">落子无悔 · 五连即胜</p>
+        <p class="streak" id="homeStreak" hidden></p>
       </div>
+      <nav class="menu">
+        <button class="menu-btn resume" id="btnResume" hidden>
+          <span class="mb-title">继续对局</span><span class="mb-sub" id="resumeSub"></span>
+        </button>
+        <button class="menu-btn primary" id="btnAI">
+          <span class="mb-title">人机对战</span><span class="mb-sub">四档 AI，从入门到大师</span>
+        </button>
+        <button class="menu-btn" id="btnPVP">
+          <span class="mb-title">双人对战</span><span class="mb-sub">同一设备轮流落子</span>
+        </button>
+        <div class="menu-row">
+          <button class="menu-btn small" id="btnStats">战绩</button>
+          <button class="menu-btn small" id="btnSettings">设置</button>
+          <button class="menu-btn small" id="btnRules">玩法</button>
+        </div>
+      </nav>
     </section>
-  </main>
+
+    <!-- 对局页 -->
+    <section id="game" class="screen" aria-label="对局">
+      <header class="topbar">
+        <button class="icon-btn" id="btnBack" aria-label="返回首页">
+          <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <div class="title" id="gameTitle">人机对战</div>
+        <button class="icon-btn" id="btnGameSettings" aria-label="设置">
+          <svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        </button>
+      </header>
+
+      <div class="players">
+        <div class="pcard" id="pBlack"><i class="dot black"></i><span class="pname" id="nameBlack">黑方</span></div>
+        <div class="moveinfo"><b id="moveNo">第 1 手</b><small id="statusText"></small></div>
+        <div class="pcard right" id="pWhite"><span class="pname" id="nameWhite">白方</span><i class="dot white"></i></div>
+      </div>
+
+      <div class="board-area">
+        <div class="board-wrap">
+          <canvas id="board" aria-label="五子棋棋盘"></canvas>
+          <div id="toast" role="status" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <nav class="actions" id="actionBar">
+        <button class="act" id="btnUndo"><svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg><span>悔棋</span></button>
+        <button class="act" id="btnHint"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg><span>提示</span></button>
+        <button class="act" id="btnResign"><svg viewBox="0 0 24 24"><path d="M4 22V4M4 4h13l-2 4 2 4H4"/></svg><span>认输</span></button>
+        <button class="act" id="btnRestart"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M20.5 15A9 9 0 1 1 18 5.6L23 10"/></svg><span>重开</span></button>
+        <button class="act accent" id="btnReplay"><svg viewBox="0 0 24 24"><path d="M5 3l14 9-14 9V3z"/></svg><span>复盘</span></button>
+      </nav>
+
+      <nav class="actions replaybar" id="replayBar">
+        <div class="rp-top">
+          <span id="rpLabel">第 0 / 0 手</span>
+          <button class="rp-exit" id="rpExit">退出复盘</button>
+        </div>
+        <input type="range" id="rpSlider" min="0" max="0" value="0" aria-label="复盘进度">
+        <div class="rp-ctrl">
+          <button class="icon-btn" id="rpFirst" aria-label="回到开局"><svg viewBox="0 0 24 24"><path d="M19 20L9 12l10-8v16zM5 19V5"/></svg></button>
+          <button class="icon-btn" id="rpPrev" aria-label="上一手"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <button class="icon-btn big" id="rpPlay" aria-label="自动播放"><svg viewBox="0 0 24 24" id="rpPlayIcon"><path d="M5 3l14 9-14 9V3z"/></svg></button>
+          <button class="icon-btn" id="rpNext" aria-label="下一手"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+          <button class="icon-btn" id="rpLast" aria-label="到终局"><svg viewBox="0 0 24 24"><path d="M5 4l10 8-10 8V4zM19 5v14"/></svg></button>
+        </div>
+      </nav>
+    </section>
+  </div>
+
+  <div id="modal" class="modal" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" id="sheet"></div>
+  </div>
+  <canvas id="fx" aria-hidden="true"></canvas>
 
   <script src="src/rules.js"></script>
   <script src="src/game.js"></script>
   <script src="src/ai.js"></script>
+  <script src="src/store.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/render.js"></script>
   <script src="src/ui.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
+      let hadController = !!navigator.serviceWorker.controller;
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+      // 新版 Service Worker 接管后刷新一次，保证用到最新文件
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hadController) location.reload(); else hadController = true;
+      });
     }
   </script>
 </body>

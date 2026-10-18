@@ -1,9 +1,10 @@
 /* Service Worker：首次访问后缓存全部资源，之后可完全离线使用。
  * 更新应用文件时，递增 CACHE 版本号即可让用户拿到新版。 */
-const CACHE = 'gomoku-v1';
+const CACHE = 'gomoku-v2';
 const ASSETS = [
   './', 'index.html', 'style.css',
-  'src/rules.js', 'src/game.js', 'src/ai.js', 'src/ui.js',
+  'src/rules.js', 'src/game.js', 'src/ai.js', 'src/ai-worker.js',
+  'src/store.js', 'src/audio.js', 'src/render.js', 'src/ui.js',
   'manifest.webmanifest',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
 ];
