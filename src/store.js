@@ -18,6 +18,11 @@
     voiceHan: '',         // 阿憨的声音（空 = 自动）
     voiceWen: '',         // 老稳的声音（空 = 自动）
     voiceStyle: 'natural', // natural | fun
+    voiceEngine: 'device', // device | online（微软 Azure，需自备密钥）
+    azureKey: '',          // 仅保存在本设备浏览器里
+    azureRegion: 'eastasia',
+    onlineHan: 'zh-CN-YunxiNeural',
+    onlineWen: 'zh-CN-YunyangNeural',
     setup: { level: 'normal', side: 'black', forbidden: false },   // 上次的开局选择
   };
 

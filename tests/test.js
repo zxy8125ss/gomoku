@@ -330,8 +330,10 @@ t('解说：天元、边线、普通落子', () => {
 });
 
 t('解说：台词库完整（人物合法、句子不空不超长、占位符齐全）', () => {
-  const need = ['start.ai', 'start.pvp', 'start.forbidden', 'center', 'edge', 'plain', 'hint', 'undo', 'forbiddenTry',
-    'resign.me', 'resign.pvp', 'win.me', 'lose.me', 'win.pvp', 'draw', 'thinking', 'longgame', 'replay'];
+  const need = ['start.ai', 'start.pvp', 'start.forbidden', 'center', 'edge', 'plain', 'opening', 'plain.late', 'hint', 'undo', 'forbiddenTry',
+    'resign.me', 'resign.pvp', 'win.me', 'lose.me', 'win.pvp', 'draw', 'thinking', 'longgame', 'replay',
+    'start.ai.easy', 'start.ai.normal', 'start.ai.hard', 'start.ai.master',
+    'win.me.quick', 'win.me.long', 'win.me.streak', 'win.me.master', 'lose.me.quick', 'lose.me.easy', 'lose.me.master'];
   for (const ev of ['openThree', 'four', 'openFour', 'doubleThreat', 'blockFour', 'blockThree', 'blockDouble'])
     for (const side of ['me', 'ai', 'pvp']) need.push(`${ev}.${side}`);
   for (const k of need) assert(Com.LINES[k] && Com.LINES[k].length >= 1, `缺少台词: ${k}`);
@@ -341,11 +343,50 @@ t('解说：台词库完整（人物合法、句子不空不超长、占位符�
       assert.strictEqual(d[0][0] === d[1][0], false, `${k}: 相邻两句应由不同人说`);
       for (const [who, text] of d) {
         assert(who === '憨' || who === '稳', `${k}: 人物 ${who}`);
-        assert(text.length > 0 && text.length <= 32, `${k}: 句子长度 ${text.length}: ${text}`);
+        assert(text.length > 0 && text.length <= 48, `${k}: 句子长度 ${text.length}: ${text}`);
         assert(!/[{}]/.test(text.replace(/\{n\}/g, '')), `${k}: 占位符 ${text}`);
       }
     }
   }
+});
+
+t('解说：台词量 ≥ 200 段，且没有重复', () => {
+  const all = Object.values(Com.LINES).flat();
+  assert(all.length >= 200, `只有 ${all.length} 段`);
+  const seen = new Set();
+  for (const d of all) {
+    const k = JSON.stringify(d);
+    assert(!seen.has(k), '重复台词: ' + d[0][1]);
+    seen.add(k);
+  }
+});
+
+t('解说：主要场景每类至少 3 段，减少重复感', () => {
+  for (const k of ['plain', 'opening', 'hint', 'undo', 'forbiddenTry', 'thinking', 'win.me', 'lose.me', 'start.ai', 'start.pvp'])
+    assert(Com.LINES[k].length >= 3, `${k} 只有 ${Com.LINES[k].length} 段`);
+  for (const ev of ['openThree', 'four', 'openFour', 'doubleThreat', 'blockFour', 'blockThree'])
+    for (const side of ['me', 'ai', 'pvp']) assert(Com.LINES[`${ev}.${side}`].length >= 2, `${ev}.${side}`);
+});
+
+t('解说：开局、中盘、残局使用不同台词池', () => {
+  const b = R.createBoard();
+  const keyAt = mc => Com.createCommentator({ rng: () => 0 }).move(b, mv(4, 4, R.BLACK), { side: 'me', level: 'high', moveCount: mc }).key;
+  assert.strictEqual(keyAt(2), 'opening');
+  assert.strictEqual(keyAt(12), 'plain');
+  assert.strictEqual(keyAt(30), 'plain.late');
+  assert.strictEqual(keyAt(39), 'longgame');
+});
+
+t('解说：特定场景与通用池混合（rng 低取场景池，高取通用池）', () => {
+  const lo = Com.createCommentator({ rng: () => 0 }).event('win.me', 'quick', { n: 12 });
+  const hi = Com.createCommentator({ rng: () => 0.99 }).event('win.me', 'quick', { n: 12 });
+  const first = d => d[0][1].replace('{n}', '12');
+  assert(Com.LINES['win.me.quick'].some(d => first(d) === lo.lines[0].text), '低 rng 应取到 quick 池');
+  assert(Com.LINES['win.me'].some(d => first(d) === hi.lines[0].text), '高 rng 应取到通用池');
+  assert(!Com.LINES['win.me.quick'].some(d => first(d) === hi.lines[0].text), '高 rng 不应来自 quick 池');
+  // 没有对应变体时回退到通用池
+  const fb = Com.createCommentator({ rng: () => 0 }).event('win.me', 'nonexistent', { n: 3 });
+  assert(fb && fb.lines.length >= 2);
 });
 
 t('解说：不使用真人姓名', () => {
@@ -368,13 +409,23 @@ t('解说：频率控制与打断规则', () => {
   assert.strictEqual(Com.createCommentator({ rng: always }).move(b3, mv(9, 7, R.BLACK), { side: 'me', level: 'high', moveCount: 9 }), null);
 });
 
-t('解说：连续两次不重复同一段，占位符被替换', () => {
+t('解说：连续两次不重复同一段；所有台词的占位符都被替换，且手数能带入', () => {
   const c = Com.createCommentator({ rng: () => 0 });
   const a = c.event('hint'), b2 = c.event('hint');
   assert.notStrictEqual(JSON.stringify(a.lines), JSON.stringify(b2.lines));
-  const all = Com.createCommentator({ rng: () => 0.99 }).event('win.me', null, { n: 37 }).lines.map(l => l.text).join('');
-  assert(!/[{}]/.test(all), all);
-  assert(all.includes('37'), '第二段台词应带入手数');
+  let sawNumber = false;
+  for (const key of ['win.me', 'win.pvp', 'win.me.quick', 'win.me.long', 'lose.me.quick']) {
+    const n = Com.LINES[key].length;
+    for (let i = 0; i < n; i++) {
+      for (const r of [0, 0.99]) {
+        const rng = (() => { let calls = 0; return () => (calls++ === 0 ? r : (i + 0.5) / n); })();
+        const text = Com.createCommentator({ rng }).event(key, null, { n: 37 }).lines.map(l => l.text).join('');
+        assert(!/[{}]/.test(text), `${key}: ${text}`);
+        if (text.includes('37')) sawNumber = true;
+      }
+    }
+  }
+  assert(sawNumber, '应有台词带入手数 37');
 });
 
 console.log(`\n${passed} 项测试通过`);

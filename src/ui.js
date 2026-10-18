@@ -151,6 +151,11 @@
     view.opts.numbers = settings.numbers; view.opts.coords = settings.coords;
     view.draw();
     sfx.configure(settings);
+    Voice.configureOnline({
+      on: settings.voiceEngine === 'online', key: settings.azureKey, region: settings.azureRegion,
+      voices: { 憨: settings.onlineHan, 稳: settings.onlineWen },
+      onError: msg => toast(`在线语音不可用（${msg}），已改用设备语音`, 3800),
+    });
     chat.hidden = !settings.commentary;
     $('game').classList.toggle('chat-on', !!settings.commentary);
     if (!settings.commentary) clearNarration();
@@ -204,7 +209,7 @@
     clearNarration();
     persist();
     enterGame();
-    setTimeout(() => narrate(commentator.event(forbidden ? 'start.forbidden' : (mode === 'ai' ? 'start.ai' : 'start.pvp'))), 500);
+    setTimeout(() => narrate(commentator.event(forbidden ? 'start.forbidden' : (mode === 'ai' ? 'start.ai' : 'start.pvp'), mode === 'ai' ? level : null)), 500);
   }
 
   function enterGame() {
@@ -301,7 +306,7 @@
       session.counted = true;
       if (session.mode === 'ai') {
         const outcome = g.winner === 'draw' ? 'draw' : (g.winner === session.human ? 'win' : 'loss');
-        store.recordAI(session.level, outcome);
+        session.streak = store.recordAI(session.level, outcome).streak;
       } else store.recordPvp(g.winner === 'draw' ? 'draw' : (g.winner === BLACK ? 'black' : 'white'));
       persist();
     }
@@ -312,7 +317,13 @@
     if (g.winner === 'draw') ending = commentator.event('draw');
     else if (g.resigned) ending = commentator.event(session.mode === 'ai' ? 'resign.me' : 'resign.pvp');
     else if (session.mode === 'pvp') ending = commentator.event('win.pvp', null, { n: g.moves.length });
-    else ending = commentator.event(g.winner === session.human ? 'win.me' : 'lose.me', null, { n: g.moves.length });
+    else {
+      const won = g.winner === session.human, n = g.moves.length;
+      let variant = null;
+      if (won) variant = session.level === 'master' ? 'master' : ((session.streak || 0) >= 3 ? 'streak' : (n <= 17 ? 'quick' : (n >= 50 ? 'long' : null)));
+      else variant = n <= 20 ? 'quick' : (session.level === 'easy' ? 'easy' : (session.level === 'master' ? 'master' : null));
+      ending = commentator.event(won ? 'win.me' : 'lose.me', variant, { n });
+    }
     setTimeout(() => { if (session && session.game === g) narrate(ending); }, 900);
     setTimeout(() => { if (session && session.game === g && g.over && !replay) showResult(); }, 1000);
   }
@@ -490,26 +501,57 @@
     };
   }
 
+  const attr = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
   function voiceControls() {
-    const list = Voice.list();
-    const opts = cur => `<option value="">自动</option>` + list.map(v =>
-      `<option value="${v.uri.replace(/"/g, '&quot;')}" ${cur === v.uri ? 'selected' : ''}>${v.name}</option>`).join('');
-    return `
-      <div class="row"><div class="lbl"><span>阿憨的声音</span></div><select class="sel" data-voice="voiceHan">${opts(settings.voiceHan)}</select></div>
-      <div class="row"><div class="lbl"><span>老稳的声音</span></div><select class="sel" data-voice="voiceWen">${opts(settings.voiceWen)}</select></div>
+    const eng = settings.voiceEngine;
+    const engine = `
       <div class="row">
-        <div class="lbl"><span>音调</span><small>自然：更像正常说话；夸张：两人更好分辨</small></div>
-        <div class="seg" style="flex:none;width:48%">
-          ${[['natural', '自然'], ['fun', '夸张']].map(([k, t]) => `<button class="opt ${settings.voiceStyle === k ? 'on' : ''}" data-vstyle="${k}" style="padding:7px 4px"><b>${t}</b></button>`).join('')}
+        <div class="lbl"><span>语音来源</span><small>设备语音免费、离线；在线语音音质更好，需自备密钥</small></div>
+        <div class="seg" style="flex:none;width:52%">
+          ${[['device', '设备语音'], ['online', '在线语音']].map(([k, t]) => `<button class="opt ${eng === k ? 'on' : ''}" data-engine="${k}" style="padding:7px 4px"><b>${t}</b></button>`).join('')}
         </div>
-      </div>
-      <div class="btns" style="margin-top:6px"><button class="btn" data-preview="1">试听两人的声音</button></div>`;
+      </div>`;
+
+    let body;
+    if (eng === 'online') {
+      const opts = cur => Voice.ONLINE_VOICES.map(v => `<option value="${v.id}" ${cur === v.id ? 'selected' : ''}>${v.name}</option>`).join('');
+      body = `
+        <div class="row"><div class="lbl"><span>Azure 语音密钥</span><small>只保存在这台设备的浏览器里</small></div></div>
+        <input class="inp" type="password" data-online="azureKey" placeholder="粘贴你的 Speech 服务密钥" value="${attr(settings.azureKey)}" autocomplete="off" spellcheck="false">
+        <div class="row"><div class="lbl"><span>服务区域</span><small>密钥所在区域，如 eastasia、southeastasia</small></div>
+          <input class="inp short" type="text" data-online="azureRegion" value="${attr(settings.azureRegion)}" autocomplete="off" spellcheck="false"></div>
+        <div class="row"><div class="lbl"><span>阿憨的声音</span></div><select class="sel" data-online="onlineHan">${opts(settings.onlineHan)}</select></div>
+        <div class="row"><div class="lbl"><span>老稳的声音</span></div><select class="sel" data-online="onlineWen">${opts(settings.onlineWen)}</select></div>
+        <p class="note">需要自备微软 Azure「语音服务」的密钥。请勿在公共设备上填写。每句台词只会合成一次，之后缓存在本机，离线也能播放。失败时自动改用设备语音。</p>`;
+    } else if (Voice.deviceAvailable()) {
+      const list = Voice.list();
+      const opts = cur => `<option value="">自动</option>` + list.map(v =>
+        `<option value="${attr(v.uri)}" ${cur === v.uri ? 'selected' : ''}>${v.name}</option>`).join('');
+      body = `
+        <div class="row"><div class="lbl"><span>阿憨的声音</span></div><select class="sel" data-voice="voiceHan">${opts(settings.voiceHan)}</select></div>
+        <div class="row"><div class="lbl"><span>老稳的声音</span></div><select class="sel" data-voice="voiceWen">${opts(settings.voiceWen)}</select></div>
+        <div class="row">
+          <div class="lbl"><span>音调</span><small>自然：更像正常说话；夸张：两人更好分辨</small></div>
+          <div class="seg" style="flex:none;width:48%">
+            ${[['natural', '自然'], ['fun', '夸张']].map(([k, t]) => `<button class="opt ${settings.voiceStyle === k ? 'on' : ''}" data-vstyle="${k}" style="padding:7px 4px"><b>${t}</b></button>`).join('')}
+          </div>
+        </div>`;
+    } else {
+      body = '<p class="note">未检测到设备的中文语音，将只显示字幕。可以改用「在线语音」。</p>';
+    }
+    return engine + body + `
+      <div class="btns" style="margin-top:6px"><button class="btn" data-preview="1">试听两人的声音</button></div>
+      <p class="note" id="voiceStatus" style="margin-top:8px"></p>`;
   }
 
   async function previewVoices() {
     Voice.cancel();
+    const st = $('voiceStatus'); if (st) st.textContent = '';
     await Voice.speak('各位好，我是阿憨，今天负责热场。', '憨', voicePrefs('憨'));
     await Voice.speak('我是老稳，负责不让他乱说。', '稳', voicePrefs('稳'));
+    const s2 = Voice.status(), el = $('voiceStatus');
+    if (el && s2.online) el.textContent = s2.broken ? `在线语音失败：${s2.error}，已改用设备语音` : '在线语音工作正常';
   }
 
   function openSettings() {
@@ -532,8 +574,8 @@
       ${sw('coords', '显示坐标', '棋盘四边的字母与数字')}
       <h3>相声解说</h3>
       ${sw('commentary', '解说字幕', '原创虚构搭档「阿憨」和「老稳」边下边聊')}
-      ${sw('voice', '语音朗读', '用设备自带的中文语音，两人音调不同')}
-      ${Voice.available() ? voiceControls() : '<p class="note">未检测到设备的中文语音，将只显示字幕</p>'}
+      ${sw('voice', '语音朗读', '把解说读出来，两人声音不同')}
+      ${voiceControls()}
       <div class="row">
         <div class="lbl"><span>解说频率</span></div>
         <div class="seg" style="flex:none;width:58%">
@@ -543,6 +585,12 @@
       <div class="btns"><button class="btn primary" data-act="cancel">完成</button></div>`);
     sheet.onclick = e => {
       if (e.target.closest('[data-preview]')) { previewVoices(); return; }
+      const en = e.target.closest('[data-engine]');
+      if (en) {
+        settings.voiceEngine = en.dataset.engine; applySettings();
+        const top = sheet.scrollTop; openSettings(); sheet.scrollTop = top;    // 重新渲染并保持滚动位置
+        return;
+      }
       const vs = e.target.closest('[data-vstyle]');
       if (vs) {
         settings.voiceStyle = vs.dataset.vstyle; applySettings();
@@ -563,6 +611,12 @@
       }
     };
     sheet.onchange = e => {
+      const ok_ = e.target.dataset && e.target.dataset.online;
+      if (ok_) {
+        settings[ok_] = e.target.value.trim(); applySettings();
+        if (ok_ !== 'azureKey' && ok_ !== 'azureRegion') previewVoices();
+        return;
+      }
       const vk = e.target.dataset && e.target.dataset.voice;
       if (vk) { settings[vk] = e.target.value; applySettings(); previewVoices(); return; }
       const k = e.target.dataset && e.target.dataset.setting;

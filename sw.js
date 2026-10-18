@@ -1,6 +1,6 @@
 /* Service Worker：首次访问后缓存全部资源，之后可完全离线使用。
  * 更新应用文件时，递增 CACHE 版本号即可让用户拿到新版。 */
-const CACHE = 'gomoku-v4';
+const CACHE = 'gomoku-v5';
 const ASSETS = [
   './', 'index.html', 'style.css',
   'src/rules.js', 'src/game.js', 'src/ai.js', 'src/ai-worker.js',
@@ -16,7 +16,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('gomoku-v') && k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
