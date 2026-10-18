@@ -542,7 +542,7 @@
     }
     return engine + body + `
       <div class="btns" style="margin-top:6px"><button class="btn" data-preview="1">试听两人的声音</button></div>
-      <p class="note" style="margin-top:6px">听不到声音：先确认手机音量调大了；iPhone 系统低于 17 时，静音键打开会没有声音。</p>
+      <p class="note" style="margin-top:6px">听不到声音：先确认静音键已关、音量调大了。静音时解说只显示字幕。</p>
       <p class="note" id="voiceStatus" style="margin-top:8px"></p>`;
   }
 

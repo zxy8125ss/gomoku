@@ -42,10 +42,11 @@
   /* iOS 上中文声音列表常常要过一会儿才出来，且不一定触发 voiceschanged：每次朗读前再取一次 */
   function ensureVoices() { if (synth && !voices.length) load(); }
 
-  /* iOS 17+：把页面的音频类别设成“播放”，静音键打开时也能出声（和视频 App 一样） */
-  function playbackSession() {
-    try { if (typeof navigator !== 'undefined' && navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ }
+  /* iOS 17+：声明为“环境音”，跟随静音键——静音时所有声音（包括在线语音）都不出声 */
+  function respectSilentSwitch() {
+    try { if (typeof navigator !== 'undefined' && navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch (e) { /* ignore */ }
   }
+  respectSilentSwitch();
 
   function speakDevice(text, who, prefs) {
     return new Promise(resolve => {
@@ -195,10 +196,9 @@
     },
     /* 在用户手势里调用一次，解除 iOS 等平台的朗读/播放限制 */
     unlock() {
-      playbackSession();
       ensureVoices();
       if (synth) { try { const u = new SpeechSynthesisUtterance('。'); u.lang = 'zh-CN'; u.volume = 0; synth.speak(u); } catch (e) { /* ignore */ } }
-      if (typeof Audio !== 'undefined') {
+      if (online.on && typeof Audio !== 'undefined') {
         try {
           const a = getAudio();
           a.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
