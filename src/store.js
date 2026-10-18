@@ -15,6 +15,9 @@
     commentary: true,     // 相声式解说（字幕）
     voice: true,          // 解说语音朗读
     chatter: 'mid',       // 解说频率：high | mid | low
+    voiceHan: '',         // 阿憨的声音（空 = 自动）
+    voiceWen: '',         // 老稳的声音（空 = 自动）
+    voiceStyle: 'natural', // natural | fun
     setup: { level: 'normal', side: 'black', forbidden: false },   // 上次的开局选择
   };
 

@@ -116,7 +116,7 @@
     for (const line of item.lines) {
       if (token !== narToken) return;
       showBubble(line);
-      const spoke = settings.voice && Voice.available() ? await Voice.speak(line.text, line.who) : false;
+      const spoke = settings.voice && Voice.available() ? await Voice.speak(line.text, line.who, voicePrefs(line.who)) : false;
       if (token !== narToken) return;
       if (!spoke) await sleep(800 + line.text.length * 130);   // 没有语音时按字数停留，方便阅读字幕
       await sleep(200);
@@ -126,6 +126,8 @@
       for (const b of chat.querySelectorAll('.speaking')) b.classList.remove('speaking');
     }
   }
+
+  const voicePrefs = who => ({ uri: who === '憨' ? settings.voiceHan : settings.voiceWen, style: settings.voiceStyle });
 
   function clearNarration() {
     narToken++; narBusy = false; clearTimeout(thinkTimer);
@@ -488,6 +490,28 @@
     };
   }
 
+  function voiceControls() {
+    const list = Voice.list();
+    const opts = cur => `<option value="">自动</option>` + list.map(v =>
+      `<option value="${v.uri.replace(/"/g, '&quot;')}" ${cur === v.uri ? 'selected' : ''}>${v.name}</option>`).join('');
+    return `
+      <div class="row"><div class="lbl"><span>阿憨的声音</span></div><select class="sel" data-voice="voiceHan">${opts(settings.voiceHan)}</select></div>
+      <div class="row"><div class="lbl"><span>老稳的声音</span></div><select class="sel" data-voice="voiceWen">${opts(settings.voiceWen)}</select></div>
+      <div class="row">
+        <div class="lbl"><span>音调</span><small>自然：更像正常说话；夸张：两人更好分辨</small></div>
+        <div class="seg" style="flex:none;width:48%">
+          ${[['natural', '自然'], ['fun', '夸张']].map(([k, t]) => `<button class="opt ${settings.voiceStyle === k ? 'on' : ''}" data-vstyle="${k}" style="padding:7px 4px"><b>${t}</b></button>`).join('')}
+        </div>
+      </div>
+      <div class="btns" style="margin-top:6px"><button class="btn" data-preview="1">试听两人的声音</button></div>`;
+  }
+
+  async function previewVoices() {
+    Voice.cancel();
+    await Voice.speak('各位好，我是阿憨，今天负责热场。', '憨', voicePrefs('憨'));
+    await Voice.speak('我是老稳，负责不让他乱说。', '稳', voicePrefs('稳'));
+  }
+
   function openSettings() {
     const sw = (key, title, desc) => `
       <div class="row">
@@ -509,7 +533,7 @@
       <h3>相声解说</h3>
       ${sw('commentary', '解说字幕', '原创虚构搭档「阿憨」和「老稳」边下边聊')}
       ${sw('voice', '语音朗读', '用设备自带的中文语音，两人音调不同')}
-      ${Voice.available() ? '' : '<p class="note">未检测到设备的中文语音，将只显示字幕</p>'}
+      ${Voice.available() ? voiceControls() : '<p class="note">未检测到设备的中文语音，将只显示字幕</p>'}
       <div class="row">
         <div class="lbl"><span>解说频率</span></div>
         <div class="seg" style="flex:none;width:58%">
@@ -518,6 +542,14 @@
       </div>
       <div class="btns"><button class="btn primary" data-act="cancel">完成</button></div>`);
     sheet.onclick = e => {
+      if (e.target.closest('[data-preview]')) { previewVoices(); return; }
+      const vs = e.target.closest('[data-vstyle]');
+      if (vs) {
+        settings.voiceStyle = vs.dataset.vstyle; applySettings();
+        for (const b of sheet.querySelectorAll('[data-vstyle]')) b.classList.toggle('on', b === vs);
+        previewVoices();
+        return;
+      }
       const ch = e.target.closest('[data-chatter]');
       if (ch) {
         settings.chatter = ch.dataset.chatter; applySettings();
@@ -531,6 +563,8 @@
       }
     };
     sheet.onchange = e => {
+      const vk = e.target.dataset && e.target.dataset.voice;
+      if (vk) { settings[vk] = e.target.value; applySettings(); previewVoices(); return; }
       const k = e.target.dataset && e.target.dataset.setting;
       if (k) {
         settings[k] = e.target.checked; applySettings();
