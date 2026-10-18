@@ -121,7 +121,29 @@
     levelWrap.style.display = vsAI() ? '' : 'none';
   }
 
-  function refresh() { updateStatus(); draw(); }
+  /* ---------- 存档：关闭 App 后可继续上一局 ---------- */
+  const SAVE_KEY = 'gomoku-save-v1';
+
+  function save() {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({
+        mode: modeEl.value, level: levelEl.value,
+        moves: game.moves.map(m => [m.x, m.y]),
+      }));
+    } catch (e) { /* 隐私模式等场景下忽略 */ }
+  }
+
+  function load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(SAVE_KEY));
+      if (!data) return;
+      if ([...modeEl.options].some(o => o.value === data.mode)) modeEl.value = data.mode;
+      if ([...levelEl.options].some(o => o.value === data.level)) levelEl.value = data.level;
+      for (const [x, y] of data.moves || []) if (!game.play(x, y)) { game.reset(); break; }
+    } catch (e) { game.reset(); }
+  }
+
+  function refresh() { updateStatus(); draw(); save(); }
 
   /* ---------- AI ---------- */
   function scheduleAI() {
@@ -176,8 +198,10 @@
   undoBtn.addEventListener('click', undo);
   restartBtn.addEventListener('click', restart);
   modeEl.addEventListener('change', restart);
+  levelEl.addEventListener('change', save);
   window.addEventListener('resize', resize);
 
+  load();
   resize(); refresh(); scheduleAI();
 
   // 供测试使用

@@ -23,9 +23,14 @@ body {
   color: var(--ink);
   font: 16px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   justify-content: center;
-  padding: 16px max(16px, env(safe-area-inset-left));
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+           max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overscroll-behavior: none;            /* 禁止下拉刷新、橡皮筋回弹 */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none; user-select: none;
 }
 .app { width: 100%; max-width: 640px; display: flex; flex-direction: column; gap: 14px; }
 header { text-align: center; }
