@@ -39,9 +39,19 @@
     return others[0] || voices[0];
   }
 
+  /* iOS 上中文声音列表常常要过一会儿才出来，且不一定触发 voiceschanged：每次朗读前再取一次 */
+  function ensureVoices() { if (synth && !voices.length) load(); }
+
+  /* iOS 17+：把页面的音频类别设成“播放”，静音键打开时也能出声（和视频 App 一样） */
+  function playbackSession() {
+    try { if (typeof navigator !== 'undefined' && navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ }
+  }
+
   function speakDevice(text, who, prefs) {
     return new Promise(resolve => {
-      if (!synth || !voices.length) return resolve(false);
+      ensureVoices();
+      // 拿不到声音列表也照样朗读：系统会按 zh-CN 用默认中文声音
+      if (!synth) return resolve(false);
       let done = false;
       const finish = ok => { if (!done) { done = true; clearTimeout(guard); resolve(ok); } };
       const u = new SpeechSynthesisUtterance(text);
@@ -53,7 +63,7 @@
       u.onerror = () => finish(false);
       // 个别浏览器偶尔不触发 onend，设个保险超时
       const guard = setTimeout(() => finish(false), 2500 + text.length * 380);
-      try { synth.speak(u); } catch (e) { finish(false); }
+      try { if (synth.paused) synth.resume(); synth.speak(u); } catch (e) { finish(false); }
     });
   }
 
@@ -165,8 +175,8 @@
 
   return {
     ONLINE_VOICES,
-    deviceAvailable() { return !!synth && voices.length > 0; },
-    available() { return (!!synth && voices.length > 0) || onlineReady(); },
+    deviceAvailable() { ensureVoices(); return !!synth && voices.length > 0; },
+    available() { return !!synth || onlineReady(); },
     list() { return voices.map(v => ({ uri: v.voiceURI || v.name, name: v.name, lang: v.lang })); },
     /* cfg：{on, key, region, voices:{憨,稳}, onError}；每次改动都会重置“失败”状态 */
     configureOnline(cfg) {
@@ -185,8 +195,10 @@
     },
     /* 在用户手势里调用一次，解除 iOS 等平台的朗读/播放限制 */
     unlock() {
-      if (synth) { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; synth.speak(u); } catch (e) { /* ignore */ } }
-      if (online.on && typeof Audio !== 'undefined') {
+      playbackSession();
+      ensureVoices();
+      if (synth) { try { const u = new SpeechSynthesisUtterance('。'); u.lang = 'zh-CN'; u.volume = 0; synth.speak(u); } catch (e) { /* ignore */ } }
+      if (typeof Audio !== 'undefined') {
         try {
           const a = getAudio();
           a.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';

@@ -542,6 +542,7 @@
     }
     return engine + body + `
       <div class="btns" style="margin-top:6px"><button class="btn" data-preview="1">试听两人的声音</button></div>
+      <p class="note" style="margin-top:6px">听不到声音：先确认手机音量调大了；iPhone 系统低于 17 时，静音键打开会没有声音。</p>
       <p class="note" id="voiceStatus" style="margin-top:8px"></p>`;
   }
 
@@ -733,7 +734,10 @@
     const c = view.cellAt(e.clientX, e.clientY);
     if (c) handlePlace(c.x, c.y);
   });
-  document.addEventListener('pointerdown', () => { sfx.unlock(); Voice.unlock(); }, { once: true });
+  // iOS 有时要在多次点击后才真正放开朗读，所以前几次点击都解锁一下
+  let unlocks = 0;
+  const unlockAll = () => { sfx.unlock(); Voice.unlock(); if (++unlocks >= 3) document.removeEventListener('pointerdown', unlockAll); };
+  document.addEventListener('pointerdown', unlockAll);
 
   $('btnAI').onclick = () => { sfx.click(); openSetup('ai'); };
   $('btnPVP').onclick = () => { sfx.click(); openSetup('pvp'); };
